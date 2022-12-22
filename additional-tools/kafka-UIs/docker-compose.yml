@@ -1,0 +1,237 @@
+---
+version: '3.8'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.3.0
+    hostname: zookeeper
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: "2000"
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+
+  kafka:
+    image: confluentinc/cp-server:${CFLT_TAG}
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://:9091, EXTERNAL://:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9091, EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_JMX_PORT: 9997
+      KAFKA_JMX_HOSTNAME: kafka
+      KAKFA_AUTO_CREATE_TOPICS_ENABLE: true
+      KAFKA_BROKER_RACK: rack-0
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_NUM_PARTITIONS: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: 1
+      CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - 9092:9092
+      - 9997:9997
+  
+  # kafka:
+  #   image: confluentinc/cp-server:7.3.0
+  #   hostname: kafka
+  #   container_name: kafka
+  #   depends_on:
+  #     - zookeeper
+  #   environment:
+  #     KAFKA_BROKER_ID: 1
+  #     KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+  #     KAFKA_LISTENERS: PLAINTEXT://kafka:9091, EXTERNAL://localhost:9092
+  #     KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+  #     KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9091, EXTERNAL://localhost:9092
+  #     KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+  #     KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+  #     KAFKA_DELETE_TOPIC_ENABLE: "true"
+  #     KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: "1"
+  #     KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
+  #     KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+  #     KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+  #     CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+  #     CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+  #     CONFLUENT_TIER_METADATA_REPLICATION_FACTOR: 1
+  #     CONFLUENT_METADATA_TOPIC_REPLICATION_FACTOR: 1
+  #     CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+  #     CONFLUENT_SECURITY_EVENT_LOGGER_EXPORTER_KAFKA_TOPIC_REPLICAS: 1
+  #     KAFKA_AUTO_CREATE_TOPICS_ENABLE: TRUE
+  #     KAFKA_JMX_PORT: 9997
+  #   ports:
+  #     - 9092:9092
+  #     - 9997:9997
+
+  schema-registry:
+    image: confluentinc/cp-schema-registry:${CFLT_TAG}
+    hostname: schema-registry
+    container_name: schema-registry
+    restart: always
+    ports:
+      - "8081:8081"
+    environment:
+      SCHEMA_REGISTRY_HOST_NAME: schema-registry
+      SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka:9091'
+      SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+
+  connect:
+    image: confluentinc/cp-kafka-connect:${CFLT_TAG}
+    hostname: connect
+    container_name: connect
+    depends_on:
+      - kafka
+      - schema-registry
+    ports:
+      - "8083:8083"
+    command: 
+      - bash
+      - -c
+      - |
+        echo "Installing Connector"
+        confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.6.0
+        # confluent-hub install --no-prompt confluentinc/kafka-connect-jdbc:10.6.0
+        #
+        echo "Launching Kafka Connect worker"
+        /etc/confluent/docker/run &
+        #
+        sleep infinity
+    environment:
+      CONNECT_REST_ADVERTISED_HOST_NAME: connect
+      CONNECT_GROUP_ID: compose-connect-group
+      CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+      CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+      CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: http://schema-registry:8081
+      CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+      CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9091
+
+  console:
+    image: docker.redpanda.com/vectorized/console:latest
+    hostname: console
+    container_name: console
+    restart: on-failure
+    entrypoint: /bin/sh
+    command: -c "echo \"$$CONSOLE_CONFIG_FILE\" > /tmp/config.yml; /app/console"
+    environment:
+      CONFIG_FILEPATH: /tmp/config.yml
+      CONSOLE_CONFIG_FILE: |
+        kafka:
+          brokers: ["kafka:9091"]
+          schemaRegistry:
+            enabled: true
+            urls: ["http://schema-registry:8081"]
+        connect:
+          enabled: true
+          clusters:
+            - name: dev
+              url: http://connect:8083
+    ports:
+      - "8080:8080"
+    depends_on:
+      - kafka
+
+  kafdrop:
+    hostname: kafdrop
+    container_name: kafdrop
+    image: obsidiandynamics/kafdrop
+    restart: "always"
+    ports:
+      - "9000:9000"
+    environment:
+      KAFKA_BROKERCONNECT: "kafka:9091"
+      CMD_ARGS: "--schemaregistry.connect=http://schema-registry:8081"
+      JVM_OPTS: "-Xms16M -Xmx48M -Xss180K -XX:-TieredCompilation -XX:+UseStringDeduplication -noverify"
+    depends_on:
+      - "kafka"
+  
+  kafka-ui:
+    container_name: kafka-ui
+    image: provectuslabs/kafka-ui:latest
+    ports:
+      - 28080:8080
+    depends_on:
+      - kafka
+      - schema-registry
+      - connect
+    environment:
+      KAFKA_CLUSTERS_0_NAME: local
+      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:9091
+      KAFKA_CLUSTERS_0_METRICS_PORT: 9997
+      KAFKA_CLUSTERS_0_SCHEMAREGISTRY: http://schema-registry:8081
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_NAME: first
+      KAFKA_CLUSTERS_0_KAFKACONNECT_0_ADDRESS: http://connect:8083
+
+  # conduktor-platform:
+  #   image: conduktor/conduktor-platform:1.8.0
+  #   ports:
+  #     - 18080:8080
+  #   depends_on:
+  #     - kafka
+  #     - schema-registry
+  #   environment:
+  #     KAFKA_BOOTSTRAP_SERVER: kafka:9091
+  #     SR_SERVER: "http://schema-registry:8081"
+  #     ORGANISATION_NAME: "DEMO"
+  #   healthcheck:
+  #     test:
+  #       [
+  #         "CMD-SHELL",
+  #         "curl --fail http://localhost:${CDK_LISTENING_PORT:-8080}/platform/api/modules/health/live"
+  #       ]
+  #     interval: 30s
+  #     start_period: 120s # Leave time for the psql init scripts to run
+  #     timeout: 5s
+  #     retries: 3
+
+  # magic:
+  #   image: digitsy/kafka-magic
+  #   ports:
+  #     - "8082:80"
+  #   environment:
+  #     KMAGIC_ALLOW_TOPIC_DELETE: "true"
+  #     KMAGIC_ALLOW_SCHEMA_DELETE: "true"
+
+  kafkistry:
+    container_name: kafkistry
+    image: infobip/kafkistry:latest
+    ports:
+      - 9080:8080
+    depends_on:
+      - kafka
+      - schema-registry
+      - connect
+    environment:
+      USERS_PASSWORDS: "foo|bar|Admy|Adminsky|admin@kafkistry.local|ADMIN|"
+      OWNER_GROUPS: "Test_Group|foo"
+      GIT_COMMIT_TO_MASTER_BY_DEFAULT: true
+
+  burrow:
+    container_name: burrow
+    image: rampi88/burrow
+    volumes:
+      - ${PWD}/burrow:/etc/burrow/
+      - ${PWD}/tmp:/var/tmp/burrow
+    ports:
+      - 18000:8000
+    depends_on:
+      - zookeeper
+      - kafka
+    restart: always

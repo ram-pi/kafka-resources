@@ -1,0 +1,165 @@
+-- create first stream
+create stream ds with (kafka_topic = 'mariadb.devices', value_format = 'AVRO');
+
+-- create table
+create table dt as select deviceid, latest_by_offset(first_testing_date) latest_update, latest_by_offset(firsttripdone) first_trip_done from ds group by deviceid emit changes;
+
+create stream trips_stream (deviceId INT, date DATE) with (kafka_topic = 'trips', value_format = 'JSON');
+
+-- drop table if exists
+drop table devices;
+
+-- create before topic
+CREATE OR REPLACE TABLE devices
+(
+    key INT PRIMARY KEY,
+    last_update TIMESTAMP,
+    is_available_since TIMESTAMP,
+    is_active INT
+) 
+with (
+    kafka_topic = 'devices',
+    value_format = 'AVRO',
+    partitions = 1
+);
+
+-- create after topic
+CREATE OR REPLACE TABLE devices
+(
+    key INT PRIMARY KEY,
+    last_update TIMESTAMP,
+    is_available_since TIMESTAMP,
+    is_active INT
+) 
+with (
+    kafka_topic = 'devices',
+    value_format = 'AVRO',
+    timestamp='is_available_since'
+    --,timestamp_format='yyyy-MM-dd''T''HH:mm:ss.SSS' -- 2022-08-18T08:47:57.000
+);
+
+SET 'auto.offset.reset' = 'earliest';
+select * from devices;
+
+CREATE TABLE devices_q AS SELECT * FROM DEVICES;
+drop table devices_q;
+drop table devices;
+
+CREATE OR REPLACE STREAM trips (
+    deviceId_timestamp VARCHAR KEY,
+    deviceId INT,
+    event_timestamp VARCHAR
+) WITH (
+    kafka_topic = 'trips',
+    partitions = 1,
+    value_format = 'json',
+    timestamp='event_timestamp',
+    timestamp_format='yyyy-MM-dd''T''HH:mm:ssX' -- 2022-08-16T11:20:00+02
+);
+
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ('1_2022-08-16T11:20:00+02', 1, '2022-08-16T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ('2_2022-08-11T11:20:00+02', 1, '2022-08-11T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ('3_2022-08-14T11:20:00+02', 1, '2022-08-14T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ('4_2022-07-16T11:20:00+02', 1, '2022-07-16T11:20:00+02');
+
+CREATE OR REPLACE STREAM trips (
+    deviceId INT KEY,
+    event_timestamp VARCHAR
+) WITH (
+    kafka_topic = 'trips',
+    partitions = 1,
+    value_format = 'json',
+    timestamp='event_timestamp',
+    timestamp_format='yyyy-MM-dd''T''HH:mm:ssX' -- 2022-08-16T11:20:00+02
+);
+
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ( 1, '2022-08-16T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ( 1, '2022-08-11T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ( 1, '2022-08-14T11:20:00+02');
+INSERT INTO trips ( deviceId, event_timestamp) VALUES ( 1, '2022-07-16T11:20:00+02');
+
+create table device_t as select id, max(is_available_since), max(last_update) from devices group by id;
+select id, max(last_update) from devices group by id emit changes;
+
+create stream devices with (kafka_topics='devices') as select * from mariadb_devices partition by id;
+
+-- new syntax for creating a table:
+CREATE TABLE users (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR
+) WITH (
+    KAFKA_TOPIC='users',
+    VALUE_FORMAT='json',
+    PARTITIONS=1
+);
+
+insert into users (id, name) values (1, 'Bob');
+insert into users (id, name) values (2, 'Alice');
+insert into users (id, name) values (3, 'Eve');
+insert into users (id, name) values (1, 'Mallory');
+
+ CREATE TABLE QUERYABLE_USERS AS SELECT * FROM USERS;
+
+ select * from QUERYABLE_USERS;
+
+ CREATE STREAM purchases (
+    purchaseId BIGINT,
+    productId BIGINT,
+    price DECIMAL(10, 2),
+    quantity INT
+) WITH (
+    KAFKA_TOPIC='purchases',
+    VALUE_FORMAT='json',
+    PARTITIONS=1
+);
+
+-- Same insert statement:
+INSERT INTO purchases (purchaseId, productId, price, quantity) VALUES (1, 1, 2.30, 2);
+INSERT INTO purchases (purchaseId, productId, price, quantity) VALUES (1, 2, 1.50, 5);
+INSERT INTO purchases (purchaseId, productId, price, quantity) VALUES (2, 1, 2.30, 1);
+
+create table products_sold as select productId, SUM(quantity) from purchases group by productId emit changes;
+select * from products_sold;
+
+CREATE TABLE products (
+    id BIGINT PRIMARY KEY,
+    name VARCHAR
+) WITH (
+    KAFKA_TOPIC='products',
+    VALUE_FORMAT='json',
+    PARTITIONS=1
+);
+
+INSERT INTO products (id, name) VALUES (1, 'Milk');
+INSERT INTO products (id, name) VALUES (2, 'Coffee');
+
+CREATE STREAM enriched_purchases AS
+SELECT *
+FROM purchases 
+JOIN products ON purchases.productId = products.id;
+
+INSERT INTO purchases (purchaseId, productId, price, quantity) VALUES (3, 1, 2.30, 5);
+
+select * from enriched_purchases;
+
+list properties;
+
+DESCRIBE PURCHASES EXTENDED;
+SHOW QUERIES;
+EXPLAINE ${QUERY_ID}; -- recovered with the command before
+
+-- logic
+SELECT
+    t.device_id as device_id,
+    'updated by ksql' as note,
+    d.is_available_since is_available_since,
+    d.last_update as last_update,
+    1 as is_active,
+    --(t.event_timestamp - d.is_available_since) as inactive_counter
+    --PARSE_DATE(FORMAT_TIMESTAMP(d.is_available_since, 'yyyy-MM-dd'), 'yyyy-MM-dd') - PARSE_DATE(FORMAT_TIMESTAMP(t.event_timestamp, 'yyyy-MM-dd'), 'yyyy-MM-dd')
+    UNIX_TIMESTAMP(t.event_timestamp) - UNIX_TIMESTAMP(d.is_available_since) inactive_counter
+FROM trips t
+INNER JOIN devices d
+  WITHIN 3 DAYS
+  ON t.device_id = d.device_id
+EMIT CHANGES;

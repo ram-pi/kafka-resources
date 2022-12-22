@@ -1,0 +1,355 @@
+version: '3.8'
+services:
+    # ZOOKEEPER
+    zookeeper:
+      container_name: "zookeeper"
+      image: confluentinc/cp-zookeeper:${CF_TAG}
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+        # ENABLE 4LW COMMANDS FROM EVERYWHERE
+        # ZOOKEEPER JMX MONITORING 
+        KAFKA_JMX_HOSTNAME: localhost
+        # ENABLE SASL 
+        KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=*"
+      ports:
+        - 2181:2181
+      cap_add:
+        - NET_ADMIN
+    # KAFKA BROKER 1
+    kafka-1:
+      container_name: "kafka-1"
+      image: confluentinc/cp-server:${CF_TAG}
+      hostname: kafka-1
+      depends_on:
+        - zookeeper
+      environment:
+        # KAFKA SECURITY CONFIGURATION  
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+        KAFKA_LISTENERS: "INTERNAL://:9092, EXTERNAL://:19092"
+        KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-1:9092, EXTERNAL://localhost:19092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT, EXTERNAL:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+        # KAFKA BROKER ID
+        KAFKA_BROKER_ID: "1"
+        # KAFKA GENERAL CONFIGURATION
+        KAFKA_DELETE_TOPIC_ENABLE: "true"
+        # JMX METRICS
+        JMX_PORT: 30001
+      ports:
+        - 19092:19092
+        - 30001:30001
+      cap_add:
+        - NET_ADMIN
+    # KAFKA BROKER 2
+    kafka-2:
+      container_name: "kafka-2"
+      image: confluentinc/cp-server:${CF_TAG}
+      hostname: kafka-2
+      depends_on:
+        - zookeeper
+      environment:
+        # KAFKA SECURITY CONFIGURATION  
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+        KAFKA_LISTENERS: "INTERNAL://:9092, EXTERNAL://:29092"
+        KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-2:9092, EXTERNAL://localhost:29092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT, EXTERNAL:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+        # KAFKA BROKER ID
+        KAFKA_BROKER_ID: "2"
+        # KAFKA GENERAL CONFIGURATION
+        KAFKA_DELETE_TOPIC_ENABLE: "true"
+      ports:
+        - 29092:29092
+      cap_add:
+        - NET_ADMIN
+    # KAFKA BROKER 3
+    kafka-3:
+      container_name: "kafka-3"
+      image: confluentinc/cp-server:${CF_TAG}
+      hostname: kafka-3
+      depends_on:
+        - zookeeper
+      environment:
+        # KAFKA SECURITY CONFIGURATION  
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+        KAFKA_LISTENERS: "INTERNAL://:9092, EXTERNAL://:39092"
+        KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka-3:9092, EXTERNAL://localhost:39092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT, EXTERNAL:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+        # KAFKA BROKER ID
+        KAFKA_BROKER_ID: "3"
+        # KAFKA GENERAL CONFIGURATION
+        KAFKA_DELETE_TOPIC_ENABLE: "true"
+      ports:
+        - 39092:39092
+      cap_add:
+        - NET_ADMIN
+    # CONFLUENT - C3
+    control-center:
+      image: confluentinc/cp-enterprise-control-center:${CF_TAG}
+      hostname: control-center
+      container_name: control-center
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+        - connect
+        - schema-registry
+      ports:
+        - "9021:9021"
+      environment:
+        CONTROL_CENTER_BOOTSTRAP_SERVERS: 'kafka-1:9092,kafka-3:9092,kafka-3:9092'
+        # CONTROL_CENTER_CONNECT_LOCAL_CLUSTER: "http://connect:8083"
+        CONTROL_CENTER_CONNECT_CONNECT_CLUSTER: 'connect:8083'
+        # Change healthcheck endpoint for CE 
+        CONTROL_CENTER_CONNECT_HEALTHCHECK_ENDPOINT: "/connectors"
+        CONTROL_CENTER_REPLICATION_FACTOR: 1
+        CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+        CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+        CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+        CONTROL_CENTER_KSQL_KSQLDB1_URL: "http://ksqldb-server:8088,http://additional-ksqldb-server:8088"
+        CONTROL_CENTER_KSQL_KSQLDB1_ADVERTISED_URL: "http://ksqldb-server:8088,http://additional-ksqldb-server:8088"
+        CONTROL_CENTER_KSQL_KSQLDB2_URL: "http://additional-cluster-ksqldb-server:8088"
+        CONTROL_CENTER_KSQL_KSQLDB2_ADVERTISED_URL: "http://additional-cluster-ksqldb-server:8088"
+        CONTROL_CENTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        PORT: 9021
+        # JMX METRICS
+        JMX_PORT: 40001
+    
+    schema-registry:
+      image: confluentinc/cp-schema-registry:${CF_TAG}
+      hostname: schema-registry
+      container_name: schema-registry
+      restart: always
+      ports:
+        - "8181:8081"
+      environment:
+        SCHEMA_REGISTRY_HOST_NAME: secondary-schema-registry
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka-1:9092,kafka-3:9092,kafka-3:9092'
+        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+        SCHEMA_REGISTRY_LEADER_ELIGIBILITY: 'true'
+        SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID: 'sr-group'
+        SCHEMA_REGISTRY_KAFKASTORE_TOPIC: '_schemas'
+        SCHEMA_REGISTRY_DEBUG: 'true'
+        # JMX METRICS
+        JMX_PORT: 40002
+
+    # SECONDARY SCHEMA REGISTRY 
+    secondary-schema-registry:
+      image: confluentinc/cp-schema-registry:${CF_TAG}
+      hostname: secondary-schema-registry
+      container_name: secondary-schema-registry
+      restart: always
+      depends_on:
+        - schema-registry
+      # depends_on:
+      #   schema-registry:
+      #     condition: service_healthy
+      ports:
+        - "8182:8081"
+      environment:
+        SCHEMA_REGISTRY_HOST_NAME: secondary-schema-registry
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka-1:9092,kafka-3:9092,kafka-3:9092'
+        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+        SCHEMA_REGISTRY_LEADER_ELIGIBILITY: 'true'
+        SCHEMA_REGISTRY_KAFKASTORE_GROUP_ID: 'sr-group'
+        SCHEMA_REGISTRY_KAFKASTORE_TOPIC: '_schemas'
+        SCHEMA_REGISTRY_DEBUG: 'true'
+        # JMX METRICS
+        JMX_PORT: 40002
+    # CONNECT 
+    connect:
+      image: confluentinc/cp-kafka-connect:${CF_TAG}
+      hostname: connect
+      container_name: connect
+      # volumes:
+      #   - ./connect-components:/usr/share/confluent-hub-components
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+        - schema-registry
+      ports:
+        - "8083:8083"
+      command: 
+        - bash
+        - -c
+        - |
+          echo "Installing Connector"
+          confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.5.3
+          #
+          echo "Launching Kafka Connect worker"
+          /etc/confluent/docker/run &
+          #
+          sleep infinity
+      environment:
+        CONNECT_BOOTSTRAP_SERVERS: 'kafka-1:9092,kafka-3:9092,kafka-3:9092'
+        CONNECT_REST_ADVERTISED_HOST_NAME: connect
+        CONNECT_GROUP_ID: compose-connect-group
+        CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+        CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+        #CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+        CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+        CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+        CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+        # JMX METRICS
+        JMX_PORT: 40003
+    # CONNECT 
+    secondary-connect:
+      image: confluentinc/cp-kafka-connect:${CF_TAG}
+      hostname: secondary-connect
+      container_name: secondary-connect
+      # volumes:
+      #   - ./connect-components:/usr/share/confluent-hub-components
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+        - schema-registry
+      ports:
+        - "8084:8083"
+        - 40003:40003
+      command: 
+        - bash
+        - -c
+        - |
+          echo "Installing Connector"
+          confluent-hub install --no-prompt confluentinc/kafka-connect-datagen:0.5.3
+          #
+          echo "Launching Kafka Connect worker"
+          /etc/confluent/docker/run &
+          #
+          sleep infinity
+      environment:
+        CONNECT_BOOTSTRAP_SERVERS: 'kafka-1:9092,kafka-3:9092,kafka-3:9092'
+        CONNECT_REST_ADVERTISED_HOST_NAME: secondary-connect
+        CONNECT_GROUP_ID: compose-connect-group
+        CONNECT_CONFIG_STORAGE_TOPIC: docker-connect-configs
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+        CONNECT_OFFSET_STORAGE_TOPIC: docker-connect-offsets
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_STATUS_STORAGE_TOPIC: docker-connect-status
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+        #CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+        CONNECT_VALUE_CONVERTER: io.confluent.connect.avro.AvroConverter
+        CONNECT_VALUE_CONVERTER_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+        CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR
+    # KSQL
+    ksqldb-server:
+      image: confluentinc/cp-ksqldb-server:${CF_TAG}
+      hostname: ksqldb-server
+      container_name: ksqldb-server
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+      ports:
+        - "8088:8088"
+        - 40004:40004
+      environment:
+        KSQL_CONFIG_DIR: "/etc/ksql"
+        KSQL_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-3:9092,kafka-3:9092"
+        KSQL_HOST_NAME: ksqldb-server
+        KSQL_LISTENERS: "http://0.0.0.0:8088"
+        KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+        KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+        KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+        KSQL_KSQL_CONNECT_URL: "http://connect:8083"
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+        KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+        # DEBUGGING
+        KSQL_KSQL_HEARTBEAT_ENABLE: 'true'
+        KSQL_KSQL_LAG_REPORTING_ENABLE: 'true'
+        # CLUSTERING
+        KSQL_KSQL_SERVICE_ID: 'MAIN'
+        # JMX METRICS
+        JMX_PORT: 40004
+    # ADDITIONAL KSQL
+    additional-ksqldb-server:
+      image: confluentinc/cp-ksqldb-server:${CF_TAG}
+      hostname: additional-ksqldb-server
+      container_name: additional-ksqldb-server
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+      ports:
+        - "8089:8088"
+      environment:
+        KSQL_CONFIG_DIR: "/etc/ksql"
+        KSQL_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-3:9092,kafka-3:9092"
+        KSQL_HOST_NAME: additional-ksqldb-server
+        KSQL_LISTENERS: "http://0.0.0.0:8088"
+        KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+        KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+        KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+        KSQL_KSQL_CONNECT_URL: "http://connect:8083"
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+        KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+        # DEBUGGING
+        KSQL_KSQL_HEARTBEAT_ENABLE: 'true'
+        KSQL_KSQL_LAG_REPORTING_ENABLE: 'true'
+        # CLUSTERING
+        KSQL_KSQL_SERVICE_ID: 'MAIN'
+    # ADDITIONAL KSQL ANOTHER CLUSTER
+    additional-cluster-ksqldb-server:
+      image: confluentinc/cp-ksqldb-server:${CF_TAG}
+      hostname: additional-cluster-ksqldb-server
+      container_name: additional-cluster-ksqldb-server
+      depends_on:
+        - kafka-1
+        - kafka-2
+        - kafka-3
+      ports:
+        - "8090:8088"
+        - "1099:1099"
+      environment:
+        KSQL_CONFIG_DIR: "/etc/ksql"
+        KSQL_BOOTSTRAP_SERVERS: "kafka-1:9092,kafka-3:9092,kafka-3:9092"
+        KSQL_HOST_NAME: additional-cluster-ksqldb-server
+        KSQL_LISTENERS: "http://0.0.0.0:8088"
+        KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+        KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081,http://secondary-schema-registry:8081"
+        KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+        KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+        KSQL_KSQL_CONNECT_URL: "http://connect:8083"
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+        KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+        # MONITORING
+        KSQL_KSQL_QUERY_PULL_METRICS_ENABLED: "true"
+        KSQL_JMX_OPTS: >
+          -Djava.rmi.server.hostname=localhost
+          -Dcom.sun.management.jmxremote
+          -Dcom.sun.management.jmxremote.port=1099
+          -Dcom.sun.management.jmxremote.authenticate=false
+          -Dcom.sun.management.jmxremote.ssl=false
+          -Dcom.sun.management.jmxremote.rmi.port=1099
+        # DEBUGGING
+        KSQL_KSQL_HEARTBEAT_ENABLE: 'true'
+        KSQL_KSQL_LAG_REPORTING_ENABLE: 'true'
+        # CLUSTERING
+        KSQL_KSQL_SERVICE_ID: 'SECONDARY'
+    # KSQL CLI
+    ksqldb-cli:
+      image: confluentinc/cp-ksqldb-cli:${CF_TAG}
+      container_name: ksqldb-cli
+      entrypoint: /bin/sh
+      volumes: 
+        - ./ksql/statements.ksql:/ksql/statements.ksql
+      tty: true

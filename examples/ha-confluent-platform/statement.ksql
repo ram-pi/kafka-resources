@@ -1,0 +1,5 @@
+SET 'auto.offset.reset' = 'earliest';
+print pageviews from beginning limit 10;
+CREATE OR REPLACE STREAM pageviews with (kafka_topic = 'pageviews', value_format = 'AVRO');
+create table pages_per_user as select userid, count(pageid) from pageviews group by userid emit changes;
+select * from pages_per_user;

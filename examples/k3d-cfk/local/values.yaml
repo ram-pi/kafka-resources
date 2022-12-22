@@ -1,0 +1,8 @@
+name: confluent-operator
+image:
+  registry: docker.io
+  repository: confluentinc/confluent-operator
+  pullPolicy: IfNotPresent
+
+debug: true
+namespaced: false

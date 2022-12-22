@@ -1,0 +1,26 @@
+---
+apiVersion: platform.confluent.io/v1beta1
+kind: Connector
+metadata:
+  name: debezium-cdc
+  namespace: confluent
+spec:
+  class: "io.debezium.connector.mysql.MySqlConnector"
+  taskMax: 1
+  connectClusterRef:
+    name: connect
+  configs:
+    topics : "payments-cdc"
+    schema.registry.url : "http://schemaregistry.confluent.svc.cluster.local:8081"
+    connector.class: "io.debezium.connector.mysql.MySqlConnector"
+    database.hostname: "mariadb.mariadb"
+    database.port: "3306"
+    database.user: "root"
+    database.password: "root"
+    database.server.name: "classicmodels"
+    database.ssl.mode: "disabled"
+    poll.interval.ms: "5000"
+    database.history.kafka.bootstrap.servers: "kafka:9071"
+    database.history.kafka.topic: "mariadb-cdc-history"
+    confluent.topic.bootstrap.servers : "kafka.confluent.svc.cluster.local:9071"
+    confluent.topic.replication.factor : "1"

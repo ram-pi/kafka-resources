@@ -1,0 +1,107 @@
+---
+version: '3.8'
+services:
+  zookeeper1:
+    image: confluentinc/cp-zookeeper:${CFLT_TAG}
+    hostname: zookeeper1
+    container_name: zookeeper1
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: "2000"
+      ZOOKEEPER_SERVERS: zookeeper1:2888:3888
+  
+  kafka1:
+    image: confluentinc/cp-server:${CFLT_TAG}
+    hostname: kafka1
+    container_name: kafka1
+    depends_on:
+      - zookeeper1
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://:19091, EXTERNAL://:9091
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka1:19091, EXTERNAL://localhost:9091
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_BROKER_RACK: rack-0
+    ports:
+      - 9091:9091
+  
+  kafka2:
+    image: confluentinc/cp-server:${CFLT_TAG}
+    hostname: kafka2
+    container_name: kafka2
+    depends_on:
+      - zookeeper1
+    environment:
+      KAFKA_BROKER_ID: 2
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://:19092, EXTERNAL://:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka2:19092, EXTERNAL://localhost:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_BROKER_RACK: rack-1
+    ports:
+      - 9092:9092
+  
+  kafka3:
+    image: confluentinc/cp-server:${CFLT_TAG}
+    hostname: kafka3
+    container_name: kafka3
+    depends_on:
+      - zookeeper1
+    environment:
+      KAFKA_BROKER_ID: 3
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper1:2181
+      KAFKA_LISTENERS: PLAINTEXT://:19093, EXTERNAL://:9093
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka3:19093, EXTERNAL://localhost:9093
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_BROKER_RACK: rack-2
+    ports:
+      - 9093:9093
+
+  schema-registry:
+      image: confluentinc/cp-schema-registry:${CFLT_TAG}
+      hostname: schema-registry
+      container_name: schema-registry
+      restart: always
+      depends_on:
+        - kafka1
+        - kafka2
+        - kafka3
+      ports:
+        - "8181:8081"
+      environment:
+        SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: 'kafka1:19091,kafka2:19092,kafka3:19093'
+        SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
+        SCHEMA_REGISTRY_HOST_NAME: schema-registry
+
+  ksqldb-server:
+      image: confluentinc/cp-ksqldb-server:${CFLT_TAG}
+      hostname: ksqldb-server
+      container_name: ksqldb-server
+      depends_on:
+        - kafka1
+        - kafka2
+        - kafka3
+      ports:
+        - "8088:8088"
+      environment:
+        KSQL_CONFIG_DIR: "/etc/ksql"
+        KSQL_BOOTSTRAP_SERVERS: "kafka1:19091,kafka2:19092,kafka3:19093"
+        KSQL_HOST_NAME: ksqldb-server
+        KSQL_LISTENERS: "http://0.0.0.0:8088"
+        KSQL_CACHE_MAX_BYTES_BUFFERING: 0
+        KSQL_KSQL_SCHEMA_REGISTRY_URL: "http://schema-registry:8081"
+        KSQL_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+        KSQL_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_REPLICATION_FACTOR: 1
+        KSQL_KSQL_LOGGING_PROCESSING_TOPIC_AUTO_CREATE: 'true'
+        KSQL_KSQL_LOGGING_PROCESSING_STREAM_AUTO_CREATE: 'true'
+        # fix https://github.com/confluentinc/ksql/issues/9580
+        KSQL_KSQL_JSON__SR_CONVERTER_DESERIALIZER_ENABLED: "false"

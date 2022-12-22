@@ -1,0 +1,11 @@
+version: '3.8'
+services:
+    haproxy-alpine:
+        container_name: haproxy
+        volumes:
+            - '${PWD}:/usr/local/etc/haproxy:ro'
+        ports:
+            - '8080:80'
+            - '19093:9093'
+            - '8404:8404'
+        image: 'haproxytech/haproxy-alpine:2.8'

@@ -1,0 +1,37 @@
+{
+    "destinations": {
+        "topics": {
+            "confluent-audit-log-events": {
+                "retention_ms": 7776000000
+            }
+        }
+    },
+    "default_topics": {
+        "allowed": "confluent-audit-log-events",
+        "denied": "confluent-audit-log-events"
+    },
+    "routes": {
+        "crn:///kafka=*/topic=testtopic": {
+            "management": {
+                "denied": "",
+                "allowed": ""
+            },
+            "consume": {
+                "denied": "",
+                "allowed": ""
+            },
+            "describe": {
+                "denied": "confluent-audit-log-events",
+                "allowed": "confluent-audit-log-events"
+            },
+            "authorize": {
+                "denied": "confluent-audit-log-events",
+                "allowed": "confluent-audit-log-events"
+            },
+            "produce": {
+                "denied": "",
+                "allowed": ""
+            }
+        }
+    }
+}

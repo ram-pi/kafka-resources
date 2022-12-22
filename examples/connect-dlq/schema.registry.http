@@ -1,0 +1,7 @@
+@baseUrl = http://localhost:8181
+
+### GET /subjects
+GET {{baseUrl}}/subjects 
+
+### GET /schemas
+GET {{baseUrl}}/schemas

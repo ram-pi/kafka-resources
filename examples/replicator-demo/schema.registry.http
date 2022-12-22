@@ -1,0 +1,39 @@
+@baseUrl = http://localhost:8081
+
+### CREATE SCHEMA TYPE JSON ###
+PUT {{baseUrl}}/subjects/movie/versions HTTP/1.1
+Content-Type: application/json
+
+{
+    "schema": "{\"name\":\"movie\",\"namespace\":\"examples\",\"fields\":[{\"name\":\"movie\",\"type\":\"string\"},{\"name\":\"visualization\",\"type\":\"int\"}]}", 
+	"schemaType": "JSON"
+}
+
+### CREATE SCHEMA TYPE AVRO ###
+PUT {{baseUrl}}/subjects/movie-avro/versions HTTP/1.1
+Content-Type: application/json
+
+{
+    "schema": "{\"type\":\"record\",\"name\":\"movie\",\"namespace\":\"examples\",\"fields\":[{\"name\":\"movie\",\"type\":\"string\"},{\"name\":\"visualization\",\"type\":\"int\"}]}", 
+	"schemaType": "AVRO"
+}
+
+### 
+GET {{baseUrl}}/subjects HTTP/1.1
+Content-Type: application/json
+
+### 
+GET {{baseUrl}}/subjects/pageviews-value/versions HTTP/1.1
+Content-Type: application/json
+
+### 
+GET {{baseUrl}}/schemas/ids/1 HTTP/1.1
+Content-Type: application/json
+
+### 
+PUT {{baseUrl}}/config/pageviews-value HTTP/1.1
+Content-Type: application/json
+
+{
+    "compatibility": "NONE"
+}

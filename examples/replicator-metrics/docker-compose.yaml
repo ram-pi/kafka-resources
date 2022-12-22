@@ -1,0 +1,152 @@
+version: '3.8'
+services:
+    zookeeper:
+      container_name: "zookeeper"
+      image: confluentinc/cp-zookeeper:${CF_TAG}
+      environment:
+        ZOOKEEPER_CLIENT_PORT: 2181
+        ZOOKEEPER_TICK_TIME: 2000
+        # KAFKA_OPTS: "-Dzookeeper.4lw.commands.whitelist=*"
+        KAFKA_OPTS: "-javaagent:/tmp/jmx_prometheus_javaagent-0.12.1.jar=8091:/tmp/zookeeper_config.yml"
+      volumes:
+        - $PWD/volumes/jmx_prometheus_javaagent-0.12.1.jar:/tmp/jmx_prometheus_javaagent-0.12.1.jar
+        - $PWD/volumes/zookeeper_config.yml:/tmp/zookeeper_config.yml
+        - $PWD/volumes/jline-2.12.1.jar:/usr/share/java/kafka/jline-2.12.1.jar
+      ports:
+        - 2182:2181
+      cap_add:
+        - NET_ADMIN
+    # KAFKA DC-1 
+    kafka:
+      container_name: "kafka"
+      image: confluentinc/cp-server:${CF_TAG}
+      hostname: kafka
+      depends_on:
+        - zookeeper
+      environment:
+        KAFKA_ZOOKEEPER_CONNECT: "zookeeper:2181"
+        KAFKA_LISTENERS: "INTERNAL://:9091, EXTERNAL://:9092"
+        KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:9091, EXTERNAL://localhost:9092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT, EXTERNAL:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+        KAFKA_BROKER_ID: "1"
+        KAFKA_DELETE_TOPIC_ENABLE: "true"
+        KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+        CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:9091
+        CONFLUENT_METRICS_REPORTER_ZOOKEEPER_CONNECT: zookeeper:2181
+        # REQUIRED WHEN YOU HAVE A LESS THAN 3 KAFKA BROKERS
+        KAFKA_OFFSETS_TOPIC_NUM_PARTITIONS: "1"
+        KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+        KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+        KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+        KAFKA_OPTS: "-javaagent:/tmp/jmx_prometheus_javaagent-0.12.1.jar=8091:/tmp/kafka_config.yml"
+      volumes:
+        - $PWD/volumes/jmx_prometheus_javaagent-0.12.1.jar:/tmp/jmx_prometheus_javaagent-0.12.1.jar
+        - $PWD/volumes/kafka_config.yml:/tmp/kafka_config.yml
+      ports:
+        - 9092:9092
+      cap_add:
+        - NET_ADMIN
+    # CONNECT DC-2
+    connect:
+      #image: confluentinc/cp-kafka-connect:${CF_TAG}
+      image: confluentinc/cp-enterprise-replicator:${CF_TAG}
+      hostname: connect
+      container_name: connect
+      # volumes:
+      #   - ./connect-components:/usr/share/confluent-hub-components
+      depends_on:
+        - kafka
+      ports:
+        - "8083:8083"
+        - "2091:2091"
+        - "8091:8091"
+      environment:
+        CONNECT_BOOTSTRAP_SERVERS: 'kafka:9091'
+        CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: 1
+        CONNECT_CONFIG_STORAGE_TOPIC: connect-configs
+        CONNECT_OFFSET_STORAGE_TOPIC: connect-offsets
+        CONNECT_STATUS_STORAGE_TOPIC: connect-status
+        CONNECT_REST_ADVERTISED_HOST_NAME: connect
+        CONNECT_REST_PORT: 8083
+        CONNECT_REST_ADVERTISED_PORT: 8083
+        CONNECT_LISTENERS: http://connect:8083,http://localhost:8083
+        CONNECT_GROUP_ID: connect-group
+        CONNECT_OFFSET_FLUSH_INTERVAL_MS: 10000
+        CONNECT_KEY_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+        #CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.json.JsonConverter"
+        CONNECT_VALUE_CONVERTER: "org.apache.kafka.connect.storage.StringConverter"
+        CONNECT_PLUGIN_PATH: "/usr/share/java,/usr/share/confluent-hub-components"
+        CONNECT_LOG4J_LOGGERS: org.apache.zookeeper=ERROR,org.I0Itec.zkclient=ERROR,org.reflections=ERROR,org.apache.kafka.connect=INFO
+        # Monitoring
+        # Confluent Monitoring Interceptors for Control Center Streams Monitoring
+        CONNECT_PRODUCER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor"
+        CONNECT_PRODUCER_CONFLUENT_MONITORING_INTERCEPTOR_BOOTSTRAP_SERVERS: kafka:9091
+        CONNECT_CONSUMER_INTERCEPTOR_CLASSES: "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor"
+        CONNECT_CONSUMER_CONFLUENT_MONITORING_INTERCEPTOR_BOOTSTRAP_SERVERS: kafka:9091
+        CONNECT_REST_EXTENSION_CLASSES: io.confluent.connect.replicator.monitoring.ReplicatorMonitoringExtension
+        # JMX METRICS
+        # KAFKA_JMX_HOSTNAME: localhost
+        # KAFKA_JMX_PORT: 2091
+        KAFKA_OPTS: "-javaagent:/tmp/jmx_prometheus_javaagent-0.12.1.jar=8091:/tmp/kafka_connect.yml"
+      volumes:
+        - $PWD/volumes/jmx_prometheus_javaagent-0.12.1.jar:/tmp/jmx_prometheus_javaagent-0.12.1.jar
+        - $PWD/volumes/kafka_connect.yml:/tmp/kafka_connect.yml
+      command: "bash -c 'cp /usr/share/java/kafka-connect-replicator/replicator-rest-extension-*.jar /etc/kafka-connect/jars/; /etc/confluent/docker/run'"
+      # command: 
+      #   - bash
+      #   - -c
+      #   - |
+      #     echo "Installing Connector"
+      #     confluent-hub install --no-prompt confluentinc/kafka-connect-replicator:7.2.1
+      #     #
+      #     echo "Launching Kafka Connect worker"
+      #     /etc/confluent/docker/run &
+      #     #
+      #     sleep infinity
+    # CONFLUENT - C3
+    control-center:
+      image: confluentinc/cp-enterprise-control-center:${CF_TAG}
+      hostname: control-center
+      container_name: control-center
+      depends_on:
+        - kafka
+      ports:
+        - "9021:9021"
+      environment:
+        CONTROL_CENTER_BOOTSTRAP_SERVERS: 'kafka:9091'
+        CONTROL_CENTER_CONNECT_DC1_CLUSTER: http://connect:8083
+        # Change healthcheck endpoint for CE 
+        CONTROL_CENTER_CONNECT_HEALTHCHECK_ENDPOINT: "/connectors"
+        CONTROL_CENTER_REPLICATION_FACTOR: 1
+        CONTROL_CENTER_INTERNAL_TOPICS_PARTITIONS: 1
+        CONTROL_CENTER_MONITORING_INTERCEPTOR_TOPIC_PARTITIONS: 1
+        CONFLUENT_METRICS_TOPIC_REPLICATION: 1
+        CONTROL_CENTER_KAFKA_DC1_BOOTSTRAP_SERVERS: 'kafka:9091'
+        CONTROL_CENTER_DEPRECATED_VIEWS_ENABLE: "true"
+        PORT: 9021
+
+    prometheus:
+      image: prom/prometheus
+      container_name: prometheus
+      depends_on:
+        - kafka
+      volumes:
+        - $PWD/volumes/prometheus.yml:/etc/prometheus/prometheus.yml
+      ports:
+        - 9090:9090
+  
+    # grafana:
+    #   image: grafana/grafana
+    #   container_name: grafana
+    #   depends_on:
+    #     - prometheus
+    #   volumes:
+    #     - $PWD/volumes/provisioning:/etc/grafana/provisioning
+    #     - $PWD/volumes/dashboards:/var/lib/grafana/dashboards
+    #   ports:
+    #     - 3000:3000

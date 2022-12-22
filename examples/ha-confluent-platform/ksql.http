@@ -1,0 +1,10 @@
+@baseUrl = http://localhost:8088
+
+### Cluster Status
+GET {{baseUrl}}/clusterStatus HTTP/1.1
+
+### Server Info
+GET {{baseUrl}}/info HTTP/1.1
+
+### Server HealthCheck
+GET {{baseUrl}}/healthcheck HTTP/1.1

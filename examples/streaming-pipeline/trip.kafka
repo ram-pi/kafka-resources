@@ -1,0 +1,9 @@
+PRODUCER json-output
+topic: trips
+key: {{random.number(5)}}
+value-format: string
+{
+    "event_timestamp": "{{date.recent(5)}}"
+}
+
+###

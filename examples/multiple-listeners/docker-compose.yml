@@ -1,0 +1,64 @@
+---
+version: '3'
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:${CFLT_TAG}
+    hostname: zookeeper
+    container_name: zookeeper
+    healthcheck:
+      test: ["CMD-SHELL", "nc -vz localhost 2181"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    environment:
+      ZOOKEEPER_SERVER_ID: 1
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: "2000"
+      ZOOKEEPER_SERVERS: zookeeper:2888:3888
+  
+  kafka:
+    image: confluentinc/cp-server:${CFLT_TAG}
+    hostname: kafka
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: PLAINTEXT://:19092, EXTERNAL://:9092, SSL://:29092, SECURE://:39092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT, SSL:SSL, SECURE:SASL_SSL
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:19092, EXTERNAL://localhost:9092, SSL://localhost:29092, SECURE://localhost:39092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      # SSL CONFIGURATION
+      KAFKA_SSL_KEYSTORE_FILENAME: server.kafka.keystore.jks
+      KAFKA_SSL_KEYSTORE_LOCATION: /etc/kafka/secrets/server.kafka.keystore.jks
+      KAFKA_SSL_KEYSTORE_PASSWORD: test1234
+      # Path to file containing the password
+      KAFKA_SSL_KEYSTORE_CREDENTIALS: keystore-creds
+      KAFKA_SSL_KEY_CREDENTIALS: kafka-server-creds
+      # SASL CONFIGURATION FOR SASL_SSL LISTENER
+      KAFKA_LISTENER_NAME_SECURE_SASL_ENABLED_MECHANISMS: PLAIN
+      # MECHANISM_AUTH-METHOD
+      KAFKA_LISTENER_NAME_SECURE_PLAIN_SASL_JAAS_CONFIG: |
+          org.apache.kafka.common.security.plain.PlainLoginModule required \
+              username="admin" \
+              password="admin-secret" \
+              user_admin="admin-secret" \
+              user_alice="alice-secret";
+      # GENERAL CONFIG
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_LICENSE_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_CONFLUENT_BALANCER_TOPIC_REPLICATION_FACTOR: 1
+      CONFLUENT_METRICS_REPORTER_TOPIC_REPLICAS: 1
+      KAFKA_DELETE_TOPIC_ENABLE: "true"
+      KAFKA_METRIC_REPORTERS: io.confluent.metrics.reporter.ConfluentMetricsReporter
+      CONFLUENT_METRICS_REPORTER_BOOTSTRAP_SERVERS: kafka:19092
+    ports:
+      - 9092:9092
+      - 19092:19092
+      - 29092:29092
+      - 39092:39092
+    volumes:
+        - ./security:/etc/kafka/secrets

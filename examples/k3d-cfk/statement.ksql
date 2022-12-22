@@ -1,0 +1,50 @@
+SET 'auto.offset.reset' = 'earliest';
+
+CREATE STREAM payments WITH (
+    KAFKA_TOPIC = 'classicmodels.classicmodels.payments',
+    VALUE_FORMAT = 'AVRO'
+);
+
+select AFTER->* from payments emit changes limit 10; 
+select 
+  AFTER->AMOUNT as AMOUNT, 
+  AFTER->CUSTOMERNUMBER as CUSTOMERNUMBER
+from payments 
+where AFTER->AMOUNT > 3000
+emit changes limit 10;
+
+
+CREATE STREAM payments_to_be_verified AS
+     SELECT 
+        p.AFTER->AMOUNT as AMOUNT, 
+        p.AFTER->CUSTOMERNUMBER as CUSTOMERNUMBER
+     FROM payments p
+     WHERE p.AFTER->AMOUNT > 3000
+    ;
+
+CREATE STREAM users 
+(
+    gender VARCHAR,
+    regionid INT,
+    userid INT
+)
+WITH (
+    KAFKA_TOPIC = 'users',
+    VALUE_FORMAT = 'JSON'
+);
+
+CREATE STREAM pageviews (
+    pageid VARCHAR,
+    viewtime VARCHAR,
+    userid VARCHAR
+  ) WITH (
+    KAFKA_TOPIC = 'pageviews',
+    VALUE_FORMAT = 'JSON'
+  );
+
+create stream pagecounter as 
+  select count(*) as counter, userid as user
+  from pageviews
+  group by userid
+  emit changes
+;

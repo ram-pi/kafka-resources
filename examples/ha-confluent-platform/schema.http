@@ -1,0 +1,8 @@
+@baseUrl = http://localhost:8081
+@SecondaryUrl = http://localhost:8181
+
+### Subjects Primary
+GET {{baseUrl}}/subjects HTTP/1.1
+
+### Subjects Secondary
+GET {{SecondaryUrl}}/subjects HTTP/1.1

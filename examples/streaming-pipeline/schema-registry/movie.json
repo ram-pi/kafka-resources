@@ -1,0 +1,9 @@
+
+{
+"type": "record",
+"namespace": "io.confluent.tutorial",
+"name": "movie",
+"fields": [
+    {"name": "title", "type": "string"}
+    ]
+}

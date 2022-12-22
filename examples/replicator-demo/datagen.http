@@ -1,0 +1,35 @@
+@baseUrl = http://localhost:8083
+
+### Plugins
+GET {{baseUrl}}/connector-plugins HTTP/1.1
+
+### Plugins
+GET {{baseUrl}}/connectors HTTP/1.1
+
+### Create pageviews
+PUT {{baseUrl}}/connectors/pageviews/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "connector.class": "io.confluent.kafka.connect.datagen.DatagenConnector",
+    "kafka.topic": "pageviews",
+    "quickstart": "pageviews",
+    "iterations": -1,
+    "max.interval": "10000",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "value.converter": "io.confluent.connect.avro.AvroConverter",
+    "value.converter.schema.registry.url": "http://schema-registry:8081",
+    "_value.converter": "org.apache.kafka.connect.json.JsonConverter",
+    "_value.converter.schemas.enable":"true",
+    "quickstart": "pageviews"
+}
+
+### GET STATUS
+GET {{baseUrl}}
+
+### GET CONNECTOR STATUS
+GET {{baseUrl}}/connectors/pageviews/status
+
+### STOP
+DELETE {{baseUrl}}/connectors/pageviews

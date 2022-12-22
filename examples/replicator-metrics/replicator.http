@@ -1,0 +1,59 @@
+@baseUrl = http://localhost:8083
+@connectorName = replicator
+
+### Plugins
+GET {{baseUrl}}/connector-plugins HTTP/1.1
+
+### GET STATUS
+GET {{baseUrl}}/connectors/{{connectorName}}/status
+
+### DESCRIBE
+GET {{baseUrl}}/connectors/{{connectorName}}
+
+### GET CONNECTORS LIST
+GET {{baseUrl}}/connectors
+
+### STOP
+DELETE {{baseUrl}}/connectors/{{connectorName}} HTTP/1.1
+
+### Create replicator instance
+PUT {{baseUrl}}/connectors/{{connectorName}}/config HTTP/1.1
+Content-Type: application/json
+
+{
+    "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
+    "topic.whitelist": "users_kafka_topic_json",
+    "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+    "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+    "src.kafka.bootstrap.servers": "kafka:9091",
+    "src.consumer.group.id": "replicator-topic-users",
+    "src.consumer.confluent.monitoring.interceptor.bootstrap.servers": "kafka:9091",
+    "src.kafka.timestamps.topic.replication.factor": 1,
+    "src.kafka.timestamps.producer.confluent.monitoring.interceptor.bootstrap.servers": "kafka:9091",
+    "src.kafka.timestamps.producer.interceptor.classes": "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor",
+    "src.consumer.interceptor.classes": "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
+    "dest.kafka.timestamps.producer.interceptor.classes": "io.confluent.monitoring.clients.interceptor.MonitoringProducerInterceptor",
+    "dest.consumer.interceptor.classes": "io.confluent.monitoring.clients.interceptor.MonitoringConsumerInterceptor",
+    "dest.kafka.bootstrap.servers": "kafka:9091",
+    "error.tolerance": "all",
+    "errors.log.enable": "true",
+    "errors.log.include.messages": "true",
+    "confluent.topic.replication.factor": 1,
+    "provenance.header.enable": "true",
+    "topic.timestamp.type": "LogAppendTime",
+    "topic.rename.format": "${topic}-replica",
+    "header.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
+    "tasks.max": "1"
+}
+
+### STATUS
+GET {{baseUrl}}/connectors/{{connectorName}} HTTP/1.1
+
+### REPLICATOR METRICS
+GET {{baseUrl}}/ReplicatorMetrics
+
+### WORKER METRICS
+GET {{baseUrl}}/WorkerMetrics/replicator
+
+### WORKER METRICS GENERAL
+GET {{baseUrl}}/WorkerMetrics/
