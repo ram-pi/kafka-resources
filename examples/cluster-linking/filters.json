@@ -1,0 +1,36 @@
+{
+    "topicFilters": [
+        {
+            "name": "*",
+            "patternType": "LITERAL",
+            "filterType": "INCLUDE"
+        }
+    ]
+}
+{
+    "topicFilters": [
+        {
+            "name": "*",
+            "patternType": "LITERAL",
+            "filterType": "INCLUDE"
+        }
+    ]
+}
+{
+    "topicFilters": [
+        {
+            "name": "*",
+            "patternType": "LITERAL",
+            "filterType": "INCLUDE"
+        }
+    ]
+}
+{
+    "topicFilters": [
+        {
+            "name": "*",
+            "patternType": "LITERAL",
+            "filterType": "INCLUDE"
+        }
+    ]
+}
