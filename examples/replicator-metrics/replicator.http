@@ -22,11 +22,12 @@ Content-Type: application/json
 
 {
     "connector.class": "io.confluent.connect.replicator.ReplicatorSourceConnector",
-    "topic.whitelist": "users_kafka_topic_json",
+    "_topic.whitelist": "users",
+    "topic.regex": "users|orders|pageviews",
     "key.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
     "value.converter": "io.confluent.connect.replicator.util.ByteArrayConverter",
     "src.kafka.bootstrap.servers": "kafka:9091",
-    "src.consumer.group.id": "replicator-topic-users",
+    "src.consumer.group.id": "replicator-cg",
     "src.consumer.confluent.monitoring.interceptor.bootstrap.servers": "kafka:9091",
     "src.kafka.timestamps.topic.replication.factor": 1,
     "src.kafka.timestamps.producer.confluent.monitoring.interceptor.bootstrap.servers": "kafka:9091",
